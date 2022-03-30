@@ -42,6 +42,9 @@ class DatePicker extends StatefulWidget {
   /// Current Selected Date
   final DateTime?/*?*/ initialSelectedDate;
 
+  /// First visible Date
+  final DateTime? firstVisibleDate;
+
   /// Contains the list of inactive dates.
   /// All the dates defined in this List will be deactivated
   final List<DateTime>? inactiveDates;
@@ -61,27 +64,28 @@ class DatePicker extends StatefulWidget {
   final String locale;
 
   DatePicker(
-    this.startDate, {
-    Key? key,
-    this.width = 60,
-    this.height = 80,
-    this.controller,
-    this.monthTextStyle = defaultMonthTextStyle,
-    this.dayTextStyle = defaultDayTextStyle,
-    this.dateTextStyle = defaultDateTextStyle,
-    this.selectedTextColor = Colors.white,
-    this.selectionColor = AppColors.defaultSelectionColor,
-    this.deactivatedColor = AppColors.defaultDeactivatedColor,
-    this.initialSelectedDate,
-    this.activeDates,
-    this.inactiveDates,
-    this.daysCount = 500,
-    this.onDateChange,
-    this.locale = "en_US",
-  }) : assert(
-            activeDates == null || inactiveDates == null,
-            "Can't "
-            "provide both activated and deactivated dates List at the same time.");
+      this.startDate, {
+        Key? key,
+        this.width = 60,
+        this.height = 80,
+        this.controller,
+        this.monthTextStyle = defaultMonthTextStyle,
+        this.dayTextStyle = defaultDayTextStyle,
+        this.dateTextStyle = defaultDateTextStyle,
+        this.selectedTextColor = Colors.white,
+        this.selectionColor = AppColors.defaultSelectionColor,
+        this.deactivatedColor = AppColors.defaultDeactivatedColor,
+        this.initialSelectedDate,
+        this.firstVisibleDate,
+        this.activeDates,
+        this.inactiveDates,
+        this.daysCount = 500,
+        this.onDateChange,
+        this.locale = "en_US",
+      }) : assert(
+  activeDates == null || inactiveDates == null,
+  "Can't "
+      "provide both activated and deactivated dates List at the same time.");
 
   @override
   State<StatefulWidget> createState() => new _DatePickerState();
@@ -112,9 +116,9 @@ class _DatePickerState extends State<DatePicker> {
     }
 
     this.selectedDateStyle =
-      widget.dateTextStyle.copyWith(color: widget.selectedTextColor);
+        widget.dateTextStyle.copyWith(color: widget.selectedTextColor);
     this.selectedMonthStyle =
-      widget.monthTextStyle.copyWith(color: widget.selectedTextColor);
+        widget.monthTextStyle.copyWith(color: widget.selectedTextColor);
     this.selectedDayStyle =
         widget.dayTextStyle.copyWith(color: widget.selectedTextColor);
 
@@ -126,6 +130,12 @@ class _DatePickerState extends State<DatePicker> {
         widget.dayTextStyle.copyWith(color: widget.deactivatedColor);
 
     super.initState();
+
+    WidgetsBinding.instance!.addPostFrameCallback((_) {
+      if(widget.controller != null && widget.firstVisibleDate != null) {
+        widget.controller!.jumpToDate(widget.firstVisibleDate!);
+      }
+    });
   }
 
   @override
@@ -170,7 +180,7 @@ class _DatePickerState extends State<DatePicker> {
 
           // Check if this date is the one that is currently selected
           bool isSelected =
-              _currentDate != null ? _compareDate(date, _currentDate!) : false;
+          _currentDate != null ? _compareDate(date, _currentDate!) : false;
 
           // Return the Date Widget
           return DateWidget(
@@ -178,33 +188,43 @@ class _DatePickerState extends State<DatePicker> {
             monthTextStyle: isDeactivated
                 ? deactivatedMonthStyle
                 : isSelected
-                    ? selectedMonthStyle
-                    : widget.monthTextStyle,
+                ? selectedMonthStyle
+                : widget.monthTextStyle,
             dateTextStyle: isDeactivated
                 ? deactivatedDateStyle
                 : isSelected
-                    ? selectedDateStyle
-                    : widget.dateTextStyle,
+                ? selectedDateStyle
+                : widget.dateTextStyle,
             dayTextStyle: isDeactivated
                 ? deactivatedDayStyle
                 : isSelected
-                    ? selectedDayStyle
-                    : widget.dayTextStyle,
+                ? selectedDayStyle
+                : widget.dayTextStyle,
             width: widget.width,
             locale: widget.locale,
             selectionColor:
-                isSelected ? widget.selectionColor : Colors.transparent,
+            isSelected ? widget.selectionColor : Colors.transparent,
             onDateSelected: (selectedDate) {
               // Don't notify listener if date is deactivated
               if (isDeactivated) return;
 
-              // A date is selected
-              if (widget.onDateChange != null) {
-                widget.onDateChange!(selectedDate);
+              if(selectedDate == _currentDate) {
+                if (widget.onDateChange != null) {
+                  widget.onDateChange!(null);
+                }
+                setState(() {
+                  _currentDate = null;
+                });
               }
-              setState(() {
-                _currentDate = selectedDate;
-              });
+              else {
+                // A date is selected
+                if (widget.onDateChange != null) {
+                  widget.onDateChange!(selectedDate);
+                }
+                setState(() {
+                  _currentDate = selectedDate;
+                });
+              }
             },
           );
         },
@@ -230,18 +250,27 @@ class DatePickerController {
 
   void jumpToSelection() {
     assert(_datePickerState != null,
-        'DatePickerController is not attached to any DatePicker View.');
+    'DatePickerController is not attached to any DatePicker View.');
 
     // jump to the current Date
     _datePickerState!._controller
         .jumpTo(_calculateDateOffset(_datePickerState!._currentDate!));
   }
 
+  void jumpToDate(DateTime date) {
+    assert(_datePickerState != null,
+    'DatePickerController is not attached to any DatePicker View.');
+
+    // jump to the current Date
+    _datePickerState!._controller
+        .jumpTo(_calculateDateOffset(date));
+  }
+
   /// This function will animate the Timeline to the currently selected Date
   void animateToSelection(
       {duration = const Duration(milliseconds: 500), curve = Curves.linear}) {
     assert(_datePickerState != null,
-        'DatePickerController is not attached to any DatePicker View.');
+    'DatePickerController is not attached to any DatePicker View.');
 
     // animate to the current date
     _datePickerState!._controller.animateTo(
@@ -250,33 +279,15 @@ class DatePickerController {
         curve: curve);
   }
 
-  /// This function will animate to any date that is passed as an argument
+  /// This function will animate to any date that is passed as a parameter
   /// In case a date is out of range nothing will happen
   void animateToDate(DateTime date,
-      {duration = const Duration(milliseconds: 500), curve = Curves.linear}) {
-    assert(_datePickerState != null,
-        'DatePickerController is not attached to any DatePicker View.');
-
-    _datePickerState!._controller.animateTo(_calculateDateOffset(date),
-        duration: duration, curve: curve);
-  }
-
-  /// This function will animate to any date that is passed as an argument
-  /// this will also set that date as the current selected date
-  void setDateAndAnimate(DateTime date,
       {duration = const Duration(milliseconds: 500), curve = Curves.linear}) {
     assert(_datePickerState != null,
     'DatePickerController is not attached to any DatePicker View.');
 
     _datePickerState!._controller.animateTo(_calculateDateOffset(date),
         duration: duration, curve: curve);
-
-    if (date.compareTo(_datePickerState!.widget.startDate) >= 0 &&
-    date.compareTo(_datePickerState!.widget.startDate.add(
-        Duration(days: _datePickerState!.widget.daysCount))) <= 0) {
-      // date is in the range
-      _datePickerState!._currentDate = date;
-    }
   }
 
   /// Calculate the number of pixels that needs to be scrolled to go to the
