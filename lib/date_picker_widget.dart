@@ -131,7 +131,7 @@ class _DatePickerState extends State<DatePicker> {
 
     super.initState();
 
-    WidgetsBinding.instance!.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
       if(widget.controller != null && widget.firstVisibleDate != null) {
         widget.controller!.jumpToDate(widget.firstVisibleDate!);
       }
